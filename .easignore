@@ -1,0 +1,17 @@
+# Ignorar logs, builds e caches locais
+node_modules/
+.expo/
+.expo-shared/
+dist/
+build/
+web-build/
+*.log
+
+# Ignorar arquivos de sistema e do Windows
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# Ignorar pastas do OneDrive
+AppData/
+OneDrive/
