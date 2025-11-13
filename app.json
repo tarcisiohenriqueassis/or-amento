@@ -2,7 +2,6 @@
   "expo": {
     "name": "Planilha de Orçamento",
     "slug": "planilha-de-orcamento",
-    "owner": "tarcisiohenriqueassis",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/logo.png",
@@ -35,7 +34,9 @@
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff",
-          "dark": { "backgroundColor": "#000000" }
+          "dark": {
+            "backgroundColor": "#000000"
+          }
         }
       ],
       "expo-web-browser"
@@ -47,7 +48,7 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "73641d5e-ad15-4148-bc4b-9db63ad78939"
+        "projectId": "2db0838c-e3cf-483f-8323-fb842b0be5a6"
       }
     }
   }

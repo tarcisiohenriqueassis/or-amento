@@ -7,7 +7,6 @@ import {
   TextInput,
   StyleSheet,
   Button,
-  Alert,
   TouchableOpacity,
   LayoutAnimation,
   Platform,
@@ -37,6 +36,9 @@ export default function PlanilhaServicos() {
   const [categoriaAberta, setCategoriaAberta] = useState(null);
   const [dadosClienteAberto, setDadosClienteAberto] = useState(true);
   const [gerando, setGerando] = useState(false);
+  const [gerarParaCliente, setGerarParaCliente] = useState(true);
+  const [gerarParaConstrutor, setGerarParaConstrutor] = useState(false);
+
 
 
 
@@ -107,12 +109,11 @@ async function fetchWithTimeout(resource, options = {}, timeout = 5000) {
     ),
   ]);
 }
+
   // ================== FUNÇÕES ==================
   // 🧩 Gera o DOCX chamando o backend
- 
 
-
-  async function gerarPDF(cliente, categorias) {
+  async function gerarPDF(cliente, categorias, tipo) {
   try {
     if (!cliente.nome.trim()) {
       Toast.show({
@@ -123,7 +124,7 @@ async function fetchWithTimeout(resource, options = {}, timeout = 5000) {
       return;
     }
 
-    if(totalGeral === 0){
+    if (totalGeral === 0) {
       Toast.show({
         type: "info",
         text1: "Orçamento vazio",
@@ -134,11 +135,15 @@ async function fetchWithTimeout(resource, options = {}, timeout = 5000) {
 
     setGerando(true);
 
-    const dados = { nome: cliente.nome, telefone: cliente.telefone, endereco: cliente.endereco, categorias };
+    const dados = { 
+      nome: cliente.nome, 
+      telefone: cliente.telefone, 
+      endereco: cliente.endereco, 
+      categorias,
+      tipo // <-- envia o tipo: "cliente" ou "construtor"
+    };
 
-    console.log("Dados enviados para o backend:", dados);
-  
-    const response = await fetch("https://api-planilhadeorcamento.onrender.com/gerar-pdf", {
+    const response = await fetch("http://192.168.0.114:3000/gerar-pdf", {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/pdf" },
       body: JSON.stringify(dados),
@@ -146,14 +151,15 @@ async function fetchWithTimeout(resource, options = {}, timeout = 5000) {
 
     if (!response.ok) {
       const text = await response.text();
-       console.log("Erro do backend:", response.status, text);
-       throw new Error("Erro ao gerar PDF");
+      console.log("Erro do backend:", response.status, text);
+      throw new Error("Erro ao gerar PDF");
     }
 
     const blob = await response.blob();
     const base64 = await blobToBase64(blob);
+    const nomeArquivo = tipo === "cliente" ? "_Orcamento_Cliente.pdf" : "_Orcamento_Construtor.pdf";
+    const pdfPath = `${FileSystem.documentDirectory}${cliente.nome}${nomeArquivo}`;
 
-    const pdfPath = `${FileSystem.documentDirectory}${cliente.nome}_Orcamento.pdf`;
     await FileSystem.writeAsStringAsync(pdfPath, base64, {
       encoding: FileSystem.EncodingType.Base64,
     });
@@ -168,6 +174,8 @@ async function fetchWithTimeout(resource, options = {}, timeout = 5000) {
       text1: "PDF gerado com sucesso!",
       text2: "O arquivo foi salvo e está pronto para compartilhamento.",
     });
+    
+
   } catch (error) {
     console.error(error);
     Toast.show({
@@ -177,21 +185,22 @@ async function fetchWithTimeout(resource, options = {}, timeout = 5000) {
     });
   } finally {
     setGerando(false);
+    setTimeout(() => setGerando(false), 1000); // segurança: libera após 15s
   }
 }
 
 // Conversor auxiliar de blob → base64
-const blobToBase64 = (blob) => {
+ const blobToBase64 = (blob) => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onloadend = () => resolve(reader.result.split(",")[1]);
     reader.onerror = reject;
-    reader.readAsDataURL(blob);
+    reader.readAsDataURL(blob); 
   });
 };
 
 // 🧩 Abre/fecha categorias
-const toggleCategoria = (nome) => {
+ const toggleCategoria = (nome) => {
   LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
   setCategoriaAberta((prev) => (prev === nome ? null : nome));
 };
@@ -355,14 +364,55 @@ const toggleCategoria = (nome) => {
 
         <Text style={styles.totalTexto}>TOTAL GERAL: {totalGeral.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</Text>
 
-        <View style={{ opacity: gerando ? 0.5 : 1 }}>
-          <Button
-            title={gerando ? "Gerando..." : "Gerar PDF"}
-            onPress={() => gerarPDF(cliente, categorias)}
+        <View style={{ flexDirection: "row", justifyContent: "space-around", marginVertical: 12 }}>
+        <TouchableOpacity
+          style={styles.checkboxContainer}
+          onPress={() => setGerarParaCliente(prev => !prev)}
+        >
+          <Ionicons
+            name={gerarParaCliente ? "checkbox-outline" : "square-outline"}
+            size={36}
             color="#0d6efd"
-            disabled={gerando}
           />
-        </View>
+          <Text style={styles.checkboxLabel}>Cliente</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.checkboxContainer}
+          onPress={() => setGerarParaConstrutor(prev => !prev)}
+        >
+          <Ionicons
+            name={gerarParaConstrutor ? "checkbox-outline" : "square-outline"}
+            size={36}
+            color="#28a745"
+          />
+          <Text style={styles.checkboxLabel}>Construtor</Text>
+        </TouchableOpacity>
+      </View>
+      <View style={{padding:15}}>
+      <Button
+      title={gerando ? "Gerando..." : "Gerar PDF"}
+      onPress={() => {
+    if (gerando) return; // Evita duplo clique rápido
+
+    if (!gerarParaCliente && !gerarParaConstrutor) {
+      Toast.show({
+        type: "info",
+        text1: "Selecione pelo menos um tipo",
+      });
+      return;
+    }
+
+    if (gerarParaCliente) {
+      gerarPDF(cliente, categorias, "cliente");
+    } else if (gerarParaConstrutor) {
+      gerarPDF(cliente, categorias, "construtor");
+    }
+      }}
+      color="#0d6efd"
+      disabled={gerando}
+    />
+      </View>
       </ScrollView>
       <Text style={{ textAlign: "center", fontSize: 12, color: "#888", marginTop: 8 }}>
         Desenvolvido por EliteSupportTI
@@ -466,4 +516,15 @@ const styles = StyleSheet.create({
     marginVertical: 12,
     color: "#0d6efd",
   },
+  checkboxContainer: {
+  flexDirection: "row",
+  alignItems: "center",
+},
+checkboxLabel: {
+  marginLeft: 6,
+  fontSize: 16,
+  fontWeight: "500",
+  color: "#333",
+}
+
 });
