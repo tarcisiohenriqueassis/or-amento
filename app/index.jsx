@@ -143,7 +143,7 @@ async function fetchWithTimeout(resource, options = {}, timeout = 5000) {
       tipo // <-- envia o tipo: "cliente" ou "construtor"
     };
 
-    const response = await fetch("http://192.168.0.114:3000/gerar-pdf", {
+    const response = await fetch("https://api-planilhadeorcamento.onrender.com/gerar-pdf", {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/pdf" },
       body: JSON.stringify(dados),
