@@ -35,11 +35,8 @@ export default function PlanilhaServicos() {
   const [categorias, setCategorias] = useState(dadosIniciais || []);
   const [categoriaAberta, setCategoriaAberta] = useState(null);
   const [dadosClienteAberto, setDadosClienteAberto] = useState(true);
+  const [tipoGeracao, setTipoGeracao] = useState(null);
   const [gerando, setGerando] = useState(false);
-  const [gerarParaCliente, setGerarParaCliente] = useState(true);
-  const [gerarParaConstrutor, setGerarParaConstrutor] = useState(false);
-
-
 
 
   const [cliente, setCliente] = useState({
@@ -76,7 +73,7 @@ const toastConfig = {
       {...props}
       style={{ borderLeftColor: "#28a745", backgroundColor: "#eafaf1" }}
       contentContainerStyle={{ paddingHorizontal: 15 }}
-      text1Style={{ fontSize: 17, fontWeight: "bold", color: "#155724" }} // 🔥 aumentei de 16 → 20
+      text1Style={{ fontSize: 17, fontWeight: "bold", color: "#155724" }} 
       text2Style={{ fontSize: 13, color: "#155724" }} // 🔥 aumentei de 14 → 18
     />
   ),
@@ -100,64 +97,75 @@ const toastConfig = {
   ),
 };
 
- // Função que aplica timeout no fetch
-async function fetchWithTimeout(resource, options = {}, timeout = 5000) {
-  return Promise.race([
-    fetch(resource, options),
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("Timeout: servidor não respondeu")), timeout)
-    ),
-  ]);
-}
 
   // ================== FUNÇÕES ==================
   // 🧩 Gera o DOCX chamando o backend
 
-  async function gerarPDF(cliente, categorias, tipo) {
+   const blobToBase64 = (blob) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result.split(",")[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob); 
+  });
+};
+
+async function gerarPDF(cliente, categorias, tipo) {
+  setGerando(true); // 🔥 Liga o loading aqui
+
   try {
     if (!cliente.nome.trim()) {
       Toast.show({
         type: "info",
         text1: "Nome do cliente obrigatório",
-        text2: "Por favor, preencha o nome do cliente antes de gerar o PDF.",
+        text2: "Por favor, preencha o nome antes de gerar o PDF.",
       });
-      return;
+      return; // ❗ precisa desligar o loading ao sair
     }
 
     if (totalGeral === 0) {
       Toast.show({
         type: "info",
         text1: "Orçamento vazio",
-        text2: "Por favor, adicione valores aos itens antes de gerar o PDF.",
+        text2: "Adicione valores antes de gerar.",
       });
-      return;
+      return; // ❗ precisa desligar o loading ao sair
     }
 
-    setGerando(true);
-
-    const dados = { 
-      nome: cliente.nome, 
-      telefone: cliente.telefone, 
-      endereco: cliente.endereco, 
+    const dados = {
+      nome: cliente.nome,
+      telefone: cliente.telefone || "não informado",
+      endereco: cliente.endereco || "não informado",
       categorias,
-      tipo // <-- envia o tipo: "cliente" ou "construtor"
+      tipo,
     };
 
-    const response = await fetch("https://api-planilhadeorcamento.onrender.com/gerar-pdf", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/pdf" },
-      body: JSON.stringify(dados),
-    });
+    const response = await fetch(
+      "https://api-planilhadeorcamento.onrender.com/gerar-pdf",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/pdf",
+        },
+        body: JSON.stringify(dados),
+      }
+    );
 
     if (!response.ok) {
       const text = await response.text();
-      console.log("Erro do backend:", response.status, text);
+      console.log("Erro backend:", response.status, text);
       throw new Error("Erro ao gerar PDF");
     }
 
     const blob = await response.blob();
     const base64 = await blobToBase64(blob);
-    const nomeArquivo = tipo === "cliente" ? "_Orcamento_Cliente.pdf" : "_Orcamento_Construtor.pdf";
+
+    const nomeArquivo =
+      tipo === "cliente"
+        ? "_Orcamento_Cliente.pdf"
+        : "_Orcamento_Construtor.pdf";
+
     const pdfPath = `${FileSystem.documentDirectory}${cliente.nome}${nomeArquivo}`;
 
     await FileSystem.writeAsStringAsync(pdfPath, base64, {
@@ -172,10 +180,7 @@ async function fetchWithTimeout(resource, options = {}, timeout = 5000) {
     Toast.show({
       type: "success",
       text1: "PDF gerado com sucesso!",
-      text2: "O arquivo foi salvo e está pronto para compartilhamento.",
     });
-    
-
   } catch (error) {
     console.error(error);
     Toast.show({
@@ -184,20 +189,12 @@ async function fetchWithTimeout(resource, options = {}, timeout = 5000) {
       text2: error.message,
     });
   } finally {
-    setGerando(false);
-    setTimeout(() => setGerando(false), 1000); // segurança: libera após 15s
+    setGerando(false); // 🔥 SEMPRE DESLIGA O LOADING
   }
 }
 
 // Conversor auxiliar de blob → base64
- const blobToBase64 = (blob) => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => resolve(reader.result.split(",")[1]);
-    reader.onerror = reject;
-    reader.readAsDataURL(blob); 
-  });
-};
+
 
 // 🧩 Abre/fecha categorias
  const toggleCategoria = (nome) => {
@@ -364,55 +361,55 @@ async function fetchWithTimeout(resource, options = {}, timeout = 5000) {
 
         <Text style={styles.totalTexto}>TOTAL GERAL: {totalGeral.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</Text>
 
-        <View style={{ flexDirection: "row", justifyContent: "space-around", marginVertical: 12 }}>
-        <TouchableOpacity
-          style={styles.checkboxContainer}
-          onPress={() => setGerarParaCliente(prev => !prev)}
-        >
-          <Ionicons
-            name={gerarParaCliente ? "checkbox-outline" : "square-outline"}
-            size={36}
-            color="#0d6efd"
-          />
-          <Text style={styles.checkboxLabel}>Cliente</Text>
-        </TouchableOpacity>
+        {/* SELEÇÃO DE TIPO */}
+    <View style={{ flexDirection: "row", justifyContent: "space-around", marginVertical: 12 }}>
+      
+      {/* Cliente */}
+      <TouchableOpacity
+        style={styles.checkboxContainer}
+        onPress={() => setTipoGeracao(tipoGeracao === "cliente" ? null : "cliente")}
+      >
+        <Ionicons
+          name={tipoGeracao === "cliente" ? "checkbox-outline" : "square-outline"}
+          size={36}
+          color="#0d6efd"
+        />
+        <Text style={styles.checkboxLabel}>Cliente</Text>
+      </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.checkboxContainer}
-          onPress={() => setGerarParaConstrutor(prev => !prev)}
-        >
-          <Ionicons
-            name={gerarParaConstrutor ? "checkbox-outline" : "square-outline"}
-            size={36}
-            color="#28a745"
-          />
-          <Text style={styles.checkboxLabel}>Construtor</Text>
-        </TouchableOpacity>
-      </View>
-      <View style={{padding:15}}>
+      {/* Construtor */}
+      <TouchableOpacity
+        style={styles.checkboxContainer}
+        onPress={() => setTipoGeracao(tipoGeracao === "construtor" ? null : "construtor")}
+      >
+        <Ionicons
+          name={tipoGeracao === "construtor" ? "checkbox-outline" : "square-outline"}
+          size={36}
+          color="#28a745"
+        />
+        <Text style={styles.checkboxLabel}>Construtor</Text>
+      </TouchableOpacity>
+
+    </View>
+
+    {/* BOTÃO GERAR PDF */}
+    <View style={{ padding: 15 }}>
       <Button
-      title={gerando ? "Gerando..." : "Gerar PDF"}
-      onPress={() => {
-    if (gerando) return; // Evita duplo clique rápido
+        title={gerando ? "Gerando..." : "Gerar PDF"}
+        color="#0d6efd"
+        onPress={async () => {
 
-    if (!gerarParaCliente && !gerarParaConstrutor) {
-      Toast.show({
-        type: "info",
-        text1: "Selecione pelo menos um tipo",
-      });
-      return;
-    }
-
-    if (gerarParaCliente) {
-      gerarPDF(cliente, categorias, "cliente");
-    } else if (gerarParaConstrutor) {
-      gerarPDF(cliente, categorias, "construtor");
-    }
+        if (!tipoGeracao) {
+          Toast.show({
+            type: "info",
+            text1: "Selecione Cliente ou Construtor",
+          });
+          return;
+        }
+        await gerarPDF(cliente, categorias, tipoGeracao);
       }}
-      color="#0d6efd"
-      disabled={gerando}
-    />
-      </View>
+      />
+    </View>
       </ScrollView>
       <Text style={{ textAlign: "center", fontSize: 12, color: "#888", marginTop: 8 }}>
         Desenvolvido por EliteSupportTI
